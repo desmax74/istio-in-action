@@ -1,0 +1,55 @@
+
+oc new-project tutorial
+oc adm policy add-scc-to-user privileged -z default -n tutorial
+
+
+ms customer
+
+cd customer/java/springboot
+mvn clean package
+docker build -t example/customer .
+oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
+oc create -f ../../kubernetes/Service.yml -n tutorial
+oc expose service customer -n tutorial
+
+
+ms preference
+cd preference/java/springboot
+mvn clean package
+docker build -t example/preference:v1 .
+oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
+oc create -f ../../kubernetes/Service.yml
+
+
+ms reccomendation
+cd recommendation/java/vertx
+mvn clean package
+docker build -t example/recommendation:v1 .
+oc apply -f <(istioctl kube-inject -f ../../kubernetes/Deployment.yml) -n tutorial
+oc create -f ../../kubernetes/Service.yml -n tutorial
+
+
+curl customer-tutorial.$(minishift ip).nip.io
+
+monitor
+garfana 1
+firefox "$(minishift openshift service grafana -u)/d/1/istio-dashboard?refresh=5s&orgId=1"
+
+custom metrics
+firefox "$(minishift openshift service prometheus -u)/graph?g0.range_input=5m&g0.expr=&g0.tab=0"
+istioctl create -f istiofiles/recommendation_requestcount.yml -n istio-system
+
+
+in prometeus execute
+istio_requests_total{destination_service="recommendation.tutorial.svc.cluster.local"}
+
+
+tracing jaeger
+minishift openshift service tracing --in-browser
+
+
+kiali 
+oc login -u system:admin
+scripts/kiali/install_kiali.sh
+or 
+bash <(curl -L http://git.io/getLatestKiali)
